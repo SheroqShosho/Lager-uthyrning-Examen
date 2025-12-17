@@ -1,5 +1,6 @@
 package se.gritacademy.lageruthyrningexamen.repositorytest;
 
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
@@ -12,12 +13,14 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 @DataJpaTest
+@DisplayName("Storage unit repository tests")
 public class StorageUnitRepositoryTest {
 
     @Autowired
     private StorageUnitRepository storageUnitRepository;
 
     @Test
+    @DisplayName("Should return only active storage units")
     void shouldReturnOnlyActiveStorageUnits() {
         StorageUnit activeUnit = new StorageUnit(
                 null,

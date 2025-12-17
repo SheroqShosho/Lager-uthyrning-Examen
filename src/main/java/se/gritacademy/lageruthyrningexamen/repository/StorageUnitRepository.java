@@ -5,6 +5,6 @@ import se.gritacademy.lageruthyrningexamen.domain.StorageUnit;
 
 import java.util.List;
 
-public interface StorageUnitRepository extends JpaRepository {
+public interface StorageUnitRepository extends JpaRepository <StorageUnit, Long> {
     List<StorageUnit> findByActiveTrue();
 }

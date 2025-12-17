@@ -1,7 +1,6 @@
 package se.gritacademy.lageruthyrningexamen.domain;
 
 import jakarta.persistence.*;
-import lombok.*;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -51,9 +50,6 @@ public class StorageUnit {
     @PrePersist
     void onCreate() {
         if (createdAt == null) createdAt = Instant.now();
-        if(!active) {
-            active = true;
-        }
     }
 
     public Long getId() {
