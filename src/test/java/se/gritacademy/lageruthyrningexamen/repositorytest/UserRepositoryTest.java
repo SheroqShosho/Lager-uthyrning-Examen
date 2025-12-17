@@ -16,12 +16,14 @@ public class UserRepositoryTest {
 
     @Test
     void shouldSaveAndFindByEmail() {
-        User user = User.builder()
-                .email("test@example.com")
-                .password("hashed")
-                .fullName("Test Person")
-                .role("CUSTOMER")
-                .build();
+        User user = new User(
+                null,
+                "test@example.com",
+                "hashed",
+                "Test Person",
+                "CUSTOMER",
+                null
+        );
 
         userRepository.save(user);
 

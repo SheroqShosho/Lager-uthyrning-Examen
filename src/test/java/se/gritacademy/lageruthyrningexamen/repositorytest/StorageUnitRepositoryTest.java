@@ -19,23 +19,27 @@ public class StorageUnitRepositoryTest {
 
     @Test
     void shouldReturnOnlyActiveStorageUnits() {
-        StorageUnit activeUnit = StorageUnit.builder()
-                .name("A1")
-                .description("Active unit")
-                .sizeM2(new BigDecimal("5.00"))
-                .pricePerDay(new BigDecimal("99.00"))
-                .location("Malmo")
-                .active(true)
-                .build();
+        StorageUnit activeUnit = new StorageUnit(
+                null,
+                "A1",
+                "Active unit",
+                new BigDecimal("5.00"),
+                new BigDecimal("99.00"),
+                "Gothenburg",
+                true,
+                null
+        );
 
-        StorageUnit inactiveUnit = StorageUnit.builder()
-                .name("B2")
-                .description("Inactive unit")
-                .sizeM2(new BigDecimal("10.00"))
-                .pricePerDay(new BigDecimal("149.00"))
-                .location(("Malmo"))
-                .active(false)
-                .build();
+        StorageUnit inactiveUnit = new StorageUnit(
+                null,
+                "B2",
+                "Inactive unit",
+                new BigDecimal("10.00"),
+                new BigDecimal("149.00"),
+                "Malmo",
+                false,
+                null
+        );
 
         storageUnitRepository.save(activeUnit);
         storageUnitRepository.save(inactiveUnit);
