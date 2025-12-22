@@ -12,6 +12,7 @@ import se.gritacademy.lageruthyrningexamen.repository.BookingRepository;
 import se.gritacademy.lageruthyrningexamen.repository.StorageUnitRepository;
 import se.gritacademy.lageruthyrningexamen.repository.UserRepository;
 import se.gritacademy.lageruthyrningexamen.service.BookingService;
+import se.gritacademy.lageruthyrningexamen.service.PaymentService;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -67,7 +68,7 @@ public class BookingServiceAvailabilityTest {
     existing.addItem(new BookingItem(unit, new BigDecimal("99.00")));
     bookingRepository.save(existing);
 
-    BookingService bookingService = new BookingService(bookingRepository);
+    BookingService bookingService = new BookingService(bookingRepository, new PaymentService());
 
     // Act (overlappar: 12-14 ligger inne i 10-15)
     boolean available = bookingService.isStorageUnitAvailable(

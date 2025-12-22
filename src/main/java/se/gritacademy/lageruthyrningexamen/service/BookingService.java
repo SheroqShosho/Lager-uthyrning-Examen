@@ -18,9 +18,11 @@ import java.util.List;
 public class BookingService {
 
     private final BookingRepository bookingRepository;
+    private final PaymentService paymentService;
 
-    public BookingService(BookingRepository bookingRepository) {
+    public BookingService(BookingRepository bookingRepository, PaymentService paymentService) {
         this.bookingRepository = bookingRepository;
+        this.paymentService = paymentService;
     }
 
     @Transactional(readOnly = true)
@@ -68,4 +70,22 @@ public class BookingService {
 
         return bookingRepository.save(booking);
     }
+
+    @Transactional
+    public Booking markBookingAsPaid(Long bookingId) {
+        Booking booking = bookingRepository.findById(bookingId)
+                .orElseThrow(() -> new IllegalArgumentException("Booking not found: " + bookingId));
+
+        long amountInCents = booking.getTotalPrice()
+                .multiply(java.math.BigDecimal.valueOf(100))
+                .longValueExact();
+
+        String paymentRef = paymentService.mockPay(amountInCents);
+
+        booking.setStatus("PAID");
+        booking.setPaymentRef(paymentRef);
+
+        return bookingRepository.save(booking);
+    }
+
 }

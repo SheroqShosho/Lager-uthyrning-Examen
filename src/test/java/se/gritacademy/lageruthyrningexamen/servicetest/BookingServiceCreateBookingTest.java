@@ -13,6 +13,7 @@ import se.gritacademy.lageruthyrningexamen.repository.BookingRepository;
 import se.gritacademy.lageruthyrningexamen.repository.StorageUnitRepository;
 import se.gritacademy.lageruthyrningexamen.repository.UserRepository;
 import se.gritacademy.lageruthyrningexamen.service.BookingService;
+import se.gritacademy.lageruthyrningexamen.service.PaymentService;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -66,7 +67,7 @@ public class BookingServiceCreateBookingTest {
                 null
         ));
 
-        BookingService service = new BookingService(bookingRepository);
+        BookingService service = new BookingService(bookingRepository, new PaymentService());
 
         LocalDate start = LocalDate.of(2026, 2, 1);
         LocalDate end = LocalDate.of(2026, 2, 4); // 3 dagar
@@ -114,7 +115,7 @@ public class BookingServiceCreateBookingTest {
         existing.addItem(new BookingItem(unit, new BigDecimal("99.00")));
         bookingRepository.save(existing);
 
-        BookingService service = new BookingService(bookingRepository);
+        BookingService service = new BookingService(bookingRepository, new PaymentService());
 
         assertThrows(StorageUnitUnavailableException.class, () ->
                 service.createBooking(
