@@ -8,9 +8,9 @@ services:
       MYSQL_PASSWORD: lagerpass123
       MYSQL_ROOT_PASSWORD: rootpass123
     ports:
-      - "3306:3306"
+      - "3307:3306"
     volumes:
-      - db_data:/var/lib/mysql
+      - lager_db_data:/var/lib/mysql
 
   phpmyadmin:
     image: phpmyadmin:latest
@@ -19,9 +19,9 @@ services:
       PMA_HOST: db
       PMA_PORT: 3306
     ports:
-      - "8081:80"
+      - "8082:80"
     depends_on:
       - db
 
 volumes:
-  db_data:
+  lager_db_data:

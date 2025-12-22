@@ -1,5 +1,6 @@
 package se.gritacademy.lageruthyrningexamen.domain;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 
 import java.math.BigDecimal;
@@ -13,6 +14,7 @@ public class BookingItem {
     private Long id;
 
     // Many items belong to one booking
+    @JsonIgnore
     @ManyToOne(optional = false, fetch = FetchType.LAZY)
     @JoinColumn(name = "booking_id", nullable = false)
     private Booking booking;
