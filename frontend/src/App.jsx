@@ -15,6 +15,7 @@ export default function App() {
 
     const [error, setError] = useState("");
     const [apiMessage, setApiMessage] = useState("");
+    const [iotMessage, setIotMessage] = useState("");
 
     const [startDate, setStartDate] = useState("2026-02-01");
     const [endDate, setEndDate] = useState("2026-02-04");
@@ -80,6 +81,7 @@ export default function App() {
     const checkout = () => {
         setError("");
         setApiMessage("");
+        setIotMessage("");
 
         const payload = {
             userId,
@@ -103,8 +105,27 @@ export default function App() {
             .then(() => {
                 setApiMessage("Booking created successfully ✅");
                 setCart([]);
-                loadBookings(); // 🔥 uppdatera listan direkt
+                loadBookings(); // uppdatera listan direkt
             })
+            .catch((e) => setError(e.message));
+    };
+
+    // 🔹 MOCK IoT (OPEN/LOCK) → BACKEND
+    const iotAction = (storageUnitId, action) => {
+        setError("");
+        setApiMessage("");
+        setIotMessage("");
+
+        fetch(
+            `http://localhost:8080/api/iot/storage-units/${storageUnitId}/${action}`,
+            { method: "POST" }
+        )
+            .then(async (res) => {
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.message || "IoT action failed");
+                return data;
+            })
+            .then((data) => setIotMessage(`${data.action} OK for unit ${data.storageUnitId} ✅`))
             .catch((e) => setError(e.message));
     };
 
@@ -114,6 +135,7 @@ export default function App() {
 
             {error && <p style={{ color: "red" }}>Error: {error}</p>}
             {apiMessage && <p style={{ color: "green" }}>{apiMessage}</p>}
+            {iotMessage && <p style={{ color: "cyan" }}>{iotMessage}</p>}
 
             <ul>
                 {units.map((u) => (
@@ -190,18 +212,43 @@ export default function App() {
             ) : (
                 <ul>
                     {bookings.map((b) => (
-                        <li key={b.id} style={{ marginBottom: 10 }}>
+                        <li key={b.id} style={{ marginBottom: 14 }}>
                             <div>
                                 <b>Booking #{b.id}</b> — {b.startDate} → {b.endDate}
                             </div>
                             <div>Status: {b.status}</div>
                             <div>Total: {b.totalPrice}</div>
+
                             <div>
                                 Units:{" "}
                                 {Array.isArray(b.items)
-                                    ? b.items.map((it) => it.storageUnit?.name || it.id).join(", ")
+                                    ? b.items
+                                        .map((it) => it.storageUnit?.name || `UnitId:${it.storageUnit?.id ?? it.id}`)
+                                        .join(", ")
                                     : "-"}
                             </div>
+
+                            {/* IoT buttons (mock) - använder första itemets storageUnit */}
+                            {Array.isArray(b.items) && b.items.length > 0 && (
+                                <div style={{ marginTop: 8 }}>
+                                    <button
+                                        style={{ marginRight: 8 }}
+                                        onClick={() =>
+                                            iotAction(b.items[0].storageUnit?.id ?? 1, "open")
+                                        }
+                                    >
+                                        Open
+                                    </button>
+
+                                    <button
+                                        onClick={() =>
+                                            iotAction(b.items[0].storageUnit?.id ?? 1, "lock")
+                                        }
+                                    >
+                                        Lock
+                                    </button>
+                                </div>
+                            )}
                         </li>
                     ))}
                 </ul>
