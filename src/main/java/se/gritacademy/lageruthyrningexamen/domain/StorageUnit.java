@@ -1,11 +1,13 @@
 package se.gritacademy.lageruthyrningexamen.domain;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import jakarta.persistence.*;
 
 import java.math.BigDecimal;
 import java.time.Instant;
 
 @Entity
+@JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
 @Table(name = "storage_units")
 public class StorageUnit {
 

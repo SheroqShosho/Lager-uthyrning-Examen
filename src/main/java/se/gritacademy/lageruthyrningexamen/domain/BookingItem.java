@@ -14,9 +14,9 @@ public class BookingItem {
     private Long id;
 
     // Many items belong to one booking
-    @JsonIgnore
     @ManyToOne(optional = false, fetch = FetchType.LAZY)
     @JoinColumn(name = "booking_id", nullable = false)
+    @com.fasterxml.jackson.annotation.JsonIgnore
     private Booking booking;
 
     // Many items can reference same storage unit
