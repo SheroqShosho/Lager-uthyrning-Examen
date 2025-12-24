@@ -10,11 +10,12 @@ import se.gritacademy.lageruthyrningexamen.dto.ApiErrorResponse;
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
-    @ExceptionHandler(StringIndexOutOfBoundsException.class)
+    @ExceptionHandler(StorageUnitUnavailableException.class)
     public ResponseEntity<ApiErrorResponse> handleStorageUnitUnavailable(
             StorageUnitUnavailableException ex,
             HttpServletRequest request
     ) {
+        System.out.println("HANDLER: StorageUnitUnavailableException");
         HttpStatus status = HttpStatus.CONFLICT; // 409
         return ResponseEntity.status(status)
                 .body(new ApiErrorResponse(
@@ -31,7 +32,7 @@ public class GlobalExceptionHandler {
             IllegalArgumentException ex,
             HttpServletRequest request
     ) {
-
+        System.out.println("HANDLER: IllegalArgumentException");
         // Använder IllegalArgumentException för "User not found" just nu => gör den till 400
         HttpStatus status = HttpStatus.BAD_REQUEST; // 400
         return  ResponseEntity.status(status)
@@ -49,6 +50,7 @@ public class GlobalExceptionHandler {
             Exception ex,
             HttpServletRequest request
     ) {
+        System.out.println("HANDLER: Generic");
         HttpStatus status = HttpStatus.INTERNAL_SERVER_ERROR; // 500
         return  ResponseEntity.status(status)
                 .body(new ApiErrorResponse(
