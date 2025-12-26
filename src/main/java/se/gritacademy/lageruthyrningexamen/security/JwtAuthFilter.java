@@ -2,6 +2,7 @@ package se.gritacademy.lageruthyrningexamen.security;
 
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
+import io.jsonwebtoken.security.Keys;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -16,8 +17,6 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.security.Key;
 import java.util.Collections;
-
-import io.jsonwebtoken.security.Keys;
 
 @Component
 public class JwtAuthFilter extends OncePerRequestFilter {
@@ -35,11 +34,16 @@ public class JwtAuthFilter extends OncePerRequestFilter {
             FilterChain filterChain
     ) throws ServletException, IOException {
 
+        String path = request.getRequestURI();
         String header = request.getHeader("Authorization");
+
+        System.out.println("JWT FILTER HIT -> " + request.getMethod() + " " + path);
+        System.out.println("Authorization header: " + header);
 
         if (header != null && header.startsWith("Bearer ")) {
             try {
-                String token = header.substring(7);
+                String token = header.substring(7).trim(); // trim tar bort newline/whitespace
+                System.out.println("Token length: " + token.length());
 
                 Claims claims = Jwts.parserBuilder()
                         .setSigningKey(key)
@@ -47,8 +51,8 @@ public class JwtAuthFilter extends OncePerRequestFilter {
                         .parseClaimsJws(token)
                         .getBody();
 
-
                 String userId = claims.getSubject();
+                System.out.println("JWT OK, subject(userId): " + userId);
 
                 UsernamePasswordAuthenticationToken auth =
                         new UsernamePasswordAuthenticationToken(
@@ -60,6 +64,7 @@ public class JwtAuthFilter extends OncePerRequestFilter {
                 SecurityContextHolder.getContext().setAuthentication(auth);
 
             } catch (Exception e) {
+                System.out.println("JWT FAILED: " + e.getClass().getName() + " -> " + e.getMessage());
                 response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
                 return;
             }
@@ -67,6 +72,4 @@ public class JwtAuthFilter extends OncePerRequestFilter {
 
         filterChain.doFilter(request, response);
     }
-
-
 }

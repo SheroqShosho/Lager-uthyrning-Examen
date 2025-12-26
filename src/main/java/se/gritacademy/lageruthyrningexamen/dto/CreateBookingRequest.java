@@ -5,20 +5,11 @@ import java.util.List;
 
 public class CreateBookingRequest {
 
-    private Long userId; // ändras sen
     private List<Long> storageUnitIds;
     private LocalDate startDate;
     private LocalDate endDate;
 
     public CreateBookingRequest() {}
-
-    public Long getUserId() {
-        return userId;
-    }
-
-    public void setUserId(Long userId) {
-        this.userId = userId;
-    }
 
     public List<Long> getStorageUnitIds() {
         return storageUnitIds;

@@ -1,5 +1,6 @@
 package se.gritacademy.lageruthyrningexamen.controller;
 
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import se.gritacademy.lageruthyrningexamen.domain.Booking;
 import se.gritacademy.lageruthyrningexamen.domain.StorageUnit;
@@ -9,6 +10,7 @@ import se.gritacademy.lageruthyrningexamen.repository.BookingRepository;
 import se.gritacademy.lageruthyrningexamen.repository.StorageUnitRepository;
 import se.gritacademy.lageruthyrningexamen.repository.UserRepository;
 import se.gritacademy.lageruthyrningexamen.service.BookingService;
+import se.gritacademy.lageruthyrningexamen.security.AuthUtil;
 
 import java.util.List;
 
@@ -32,20 +34,34 @@ public class BookingController {
         this.storageUnitRepository = storageUnitRepository;
     }
 
-    @GetMapping("/user/{userId}")
-    public List<Booking> getBookingsForUser(@PathVariable Long userId) {
-        return bookingRepository.findByUserId(userId);
+    @GetMapping("/my")
+    public ResponseEntity<?> myBookings() {
+        Long userId = AuthUtil.currentUserId();
+        return ResponseEntity.ok(bookingService.getBookingsByUserId(userId));
     }
 
     @PostMapping
     public Booking createBooking(@RequestBody CreateBookingRequest request) {
-        User user = userRepository.findById(request.getUserId())
-                .orElseThrow(() -> new IllegalArgumentException("User not found: " + request.getUserId()));
 
-        List<StorageUnit> units = storageUnitRepository.findAllById(request.getStorageUnitIds());
+        Long userId = AuthUtil.currentUserId();
 
-        return bookingService.createBooking(user, units, request.getStartDate(), request.getEndDate());
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new IllegalArgumentException("User not found"));
+
+        List<StorageUnit> units =
+                storageUnitRepository.findAllById(request.getStorageUnitIds());
+
+        return bookingService.createBooking(
+                user,
+                units,
+                request.getStartDate(),
+                request.getEndDate()
+        );
     }
+
+
+
+
 
 
 }

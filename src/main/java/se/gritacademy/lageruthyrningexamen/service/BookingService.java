@@ -25,6 +25,11 @@ public class BookingService {
         this.paymentService = paymentService;
     }
 
+    public List<Booking> getBookingsByUserId(Long userId) {
+        return bookingRepository.findByUserId(userId);
+    }
+
+
     @Transactional(readOnly = true)
     public boolean isStorageUnitAvailable(StorageUnit unit, LocalDate startDate, LocalDate endDate) {
 
