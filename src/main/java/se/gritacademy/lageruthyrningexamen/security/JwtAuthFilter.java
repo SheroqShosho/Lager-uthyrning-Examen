@@ -47,6 +47,7 @@ public class JwtAuthFilter extends OncePerRequestFilter {
                         .parseClaimsJws(token)
                         .getBody();
 
+
                 String userId = claims.getSubject();
 
                 UsernamePasswordAuthenticationToken auth =
