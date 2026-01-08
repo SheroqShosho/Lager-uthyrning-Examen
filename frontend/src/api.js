@@ -1,50 +1,52 @@
-const API_BASE = "http://localhost:8080/api";
+const TOKEN_KEY = "lagerlyft_token";
+const API_BASE = "http://localhost:8080"; // backend
 
 export function getToken() {
-    return localStorage.getItem("token");
+    return localStorage.getItem(TOKEN_KEY);
 }
 
 export function setToken(token) {
-    localStorage.setItem("token", token);
+    localStorage.setItem(TOKEN_KEY, token);
 }
 
 export function clearToken() {
-    localStorage.removeItem("token");
+    localStorage.removeItem(TOKEN_KEY);
 }
 
 export async function apiFetch(path, options = {}) {
     const token = getToken();
 
+    const url = `${API_BASE}/api${path.startsWith("/") ? path : `/${path}`}`;
+
     const headers = {
-        "Content-Type": "application/json",
         ...(options.headers || {}),
     };
 
-    // Lägg bara till Authorization om token finns
-    if (token) {
-        headers.Authorization = `Bearer ${token}`;
+    // Lägg bara Content-Type om vi faktiskt skickar body
+    if (options.body !== undefined && options.body !== null) {
+        headers["Content-Type"] = "application/json";
     }
 
-    const res = await fetch(`${API_BASE}${path}`, {
+    if (token) {
+        headers["Authorization"] = `Bearer ${token}`;
+    }
+
+    const res = await fetch(url, {
         ...options,
         headers,
     });
 
-    // Försök läsa JSON om det går
-    let data = null;
     const contentType = res.headers.get("content-type") || "";
-    if (contentType.includes("application/json")) {
-        data = await res.json().catch(() => null);
-    } else {
-        data = await res.text().catch(() => null);
-    }
+    const data = contentType.includes("application/json")
+        ? await res.json().catch(() => null)
+        : await res.text().catch(() => null);
 
     if (!res.ok) {
-        const message =
+        const msg =
             (data && data.message) ||
             (typeof data === "string" && data) ||
             `HTTP ${res.status}`;
-        throw new Error(message);
+        throw new Error(msg);
     }
 
     return data;
