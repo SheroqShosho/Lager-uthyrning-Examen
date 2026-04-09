@@ -1,27 +1,58 @@
+version: '3.8'
+
 services:
-  db:
+  lager_db:
     image: mysql:8.4
     container_name: lager_db
     environment:
+      MYSQL_ROOT_PASSWORD: root
       MYSQL_DATABASE: lageruthyrning_db
       MYSQL_USER: lageruser
       MYSQL_PASSWORD: lagerpass123
-      MYSQL_ROOT_PASSWORD: rootpass123
     ports:
       - "3307:3306"
     volumes:
-      - lager_db_data:/var/lib/mysql
+      - docker_lager_db_data:/var/lib/mysql
+    networks:
+      - lager_network
 
-  phpmyadmin:
+  lager_phpmyadmin:
     image: phpmyadmin:latest
     container_name: lager_phpmyadmin
     environment:
-      PMA_HOST: db
-      PMA_PORT: 3306
+      PMA_HOST: lager_db
+      PMA_USER: lageruser
+      PMA_PASSWORD: lagerpass123
     ports:
       - "8082:80"
     depends_on:
-      - db
+      - lager_db
+    networks:
+      - lager_network
+
+  lager_backend:
+    build:
+      context: ..
+      dockerfile: ./docker/Dockerfile
+    container_name: lager_backend
+    ports:
+      - "8080:8080"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:mysql://lager_db:3306/lageruthyrning_db?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true&connectTimeout=10000&socketTimeout=10000
+      SPRING_DATASOURCE_USERNAME: lageruser
+      SPRING_DATASOURCE_PASSWORD: lagerpass123
+      JWT_SECRET: YOUR_VERY_LONG_RANDOM_SECRET_FOR_DEVELOPMENT_ONLY_MUST_BE_AT_LEAST_64_CHARS
+    depends_on:
+      - lager_db
+    networks:
+      - lager_network
 
 volumes:
-  lager_db_data:
+  docker_lager_db_data:
+    external: true
+
+networks:
+  lager_network:
+    driver: bridge
+
+

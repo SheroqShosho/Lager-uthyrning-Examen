@@ -37,17 +37,45 @@ export async function apiFetch(path, options = {}) {
     });
 
     const contentType = res.headers.get("content-type") || "";
-    const data = contentType.includes("application/json")
-        ? await res.json().catch(() => null)
-        : await res.text().catch(() => null);
+    let data = null;
+    
+    try {
+        if (contentType.includes("application/json")) {
+            data = await res.json();
+        } else {
+            data = await res.text();
+        }
+    } catch (e) {
+        data = null;
+    }
 
     if (!res.ok) {
-        const msg =
-            (data && data.message) ||
-            (typeof data === "string" && data) ||
-            `HTTP ${res.status}`;
+        let msg = `HTTP ${res.status}`;
+        
+        // Hantera JSON error-responses
+        if (data && typeof data === "object" && data.message) {
+            msg = data.message;
+        }
+        // Hantera vanlig text
+        else if (typeof data === "string" && data) {
+            msg = data;
+        }
+        
         throw new Error(msg);
     }
 
     return data;
+}
+
+// ADMIN: Skapa nytt lagerutrymme
+export async function createStorageUnit(data) {
+    return apiFetch("/storage-units", {
+        method: "POST",
+        body: JSON.stringify(data),
+    });
+}
+
+// Hämta current user info
+export async function getCurrentUser() {
+    return apiFetch("/auth/me");
 }

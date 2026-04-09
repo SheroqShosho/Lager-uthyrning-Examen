@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
+﻿import { useEffect, useMemo, useState } from "react";
 import "./App.css";
-import { apiFetch, setToken, clearToken, getToken } from "./api";
+import { apiFetch, setToken, clearToken, getToken, getCurrentUser } from "./api";
+import { AdminPanel } from "./AdminPanel";
 
 function daysBetween(start, end) {
     if (!start || !end) return 0;
@@ -8,6 +9,7 @@ function daysBetween(start, end) {
     const e = new Date(end + "T00:00:00");
     const ms = e - s;
     const days = Math.ceil(ms / (1000 * 60 * 60 * 24));
+    // Om end är före start, returnera 0, annars minst 1 dag
     return Number.isFinite(days) ? Math.max(days, 0) : 0;
 }
 
@@ -18,70 +20,104 @@ function formatMoney(n) {
 }
 
 function Badge({ tone = "neutral", children }) {
-    return (
-        <span className={`badge badge--${tone}`}>
-      {children}
-    </span>
-    );
+    return <span className={`badge badge--${tone}`}>{children}</span>;
 }
 
 export default function App() {
-    const [view, setView] = useState("lager"); // lager | bookings | login | register
-
+    const [view, setView] = useState("lager");
     const [token, setTokenState] = useState(() => getToken() || "");
     const isAuthed = !!token;
 
-    // Auth forms
     const [loginEmail, setLoginEmail] = useState("");
     const [loginPassword, setLoginPassword] = useState("");
-
     const [regEmail, setRegEmail] = useState("");
     const [regPassword, setRegPassword] = useState("");
     const [regFullName, setRegFullName] = useState("");
 
-    // Lager (storage units)
     const [units, setUnits] = useState([]);
     const [unitsLoading, setUnitsLoading] = useState(false);
     const [unitsError, setUnitsError] = useState("");
 
-    // Booking create
-    const [startDate, setStartDate] = useState(() => {
-        const d = new Date();
-        return d.toISOString().slice(0, 10);
-    });
-    const [endDate, setEndDate] = useState(() => {
-        const d = new Date();
-        d.setDate(d.getDate() + 3);
-        return d.toISOString().slice(0, 10);
-    });
-
-    const [cart, setCart] = useState([]); // array of storageUnit objects
+    const [cart, setCart] = useState([]);
     const [submitLoading, setSubmitLoading] = useState(false);
     const [successMsg, setSuccessMsg] = useState("");
     const [errorMsg, setErrorMsg] = useState("");
 
-    // My bookings
     const [myBookings, setMyBookings] = useState([]);
     const [myBookingsLoading, setMyBookingsLoading] = useState(false);
     const [myBookingsError, setMyBookingsError] = useState("");
 
-    const rentalDays = useMemo(() => daysBetween(startDate, endDate), [startDate, endDate]);
+    const [iotLoading, setIotLoading] = useState(null);
+    const [iotResult, setIotResult] = useState(null);
+    const [latestBooking, setLatestBooking] = useState(null);
+    const [lockStatus, setLockStatus] = useState({}); // Spåra låsstatus per unit
+    const [currentUser, setCurrentUser] = useState(null);
 
-    const totalPrice = useMemo(() => {
-        const sumPerDay = cart.reduce((acc, u) => acc + Number(u.pricePerDay || 0), 0);
-        return sumPerDay * rentalDays;
-    }, [cart, rentalDays]);
+    const isDateOccupied = (unit, startStr, endStr) => {
+        if (!startStr || !endStr) return false;
+
+        const start = new Date(startStr + "T00:00:00").getTime();
+        const end = new Date(endStr + "T00:00:00").getTime();
+
+        // 1. Kolla globala bokningar (bookingItems)
+        const hasGlobalOverlap = unit.bookingItems?.some(item => {
+            // Här är den kritiska biten - vi mappar mot booking-objektet
+            const b = item.booking;
+            if (!b || !b.startDate || !b.endDate) return false;
+
+            const bStart = new Date(b.startDate + "T00:00:00").getTime();
+            const bEnd = new Date(b.endDate + "T00:00:00").getTime();
+
+            const overlap = (start <= bEnd && end >= bStart);
+            if (overlap) {
+                console.log(`❌ KROCK med befintlig bokning för ${unit.name}:`, b);
+            }
+            return overlap;
+        });
+
+        // 2. Kolla mot dina egna lokala bokningar
+        const hasMyOverlap = myBookings?.some(b => {
+            const isSameUnit = b.items?.some(it => it.storageUnitId === unit.id || it.storageUnit?.id === unit.id);
+            if (!isSameUnit) return false;
+
+            const bStart = new Date(b.startDate + "T00:00:00").getTime();
+            const bEnd = new Date(b.endDate + "T00:00:00").getTime();
+
+            const overlap = (start <= bEnd && end >= bStart);
+            if (overlap) {
+                console.log(`❌ KROCK med din egen bokning för ${unit.name}`);
+            }
+            return overlap;
+        });
+
+        const result = !!(hasGlobalOverlap || hasMyOverlap);
+        console.log(`📊 isDateOccupied(${unit.name}, ${startStr}, ${endStr}):`, { hasGlobalOverlap, hasMyOverlap, result });
+        return result;
+    };
 
     async function loadUnits() {
         setUnitsLoading(true);
         setUnitsError("");
         try {
-            // Denna endpoint kräver JWT i ditt projekt => apiFetch skickar token om den finns
             const data = await apiFetch("/storage-units");
-            setUnits(Array.isArray(data) ? data : []);
+            // Denna logg är viktig! Klicka på pilen i konsolen för att se om 'bookingItems' finns med nu.
+            console.log("📦 FULLSTÄNDIG DATA FRÅN BACKEND:", data);
+
+            const unitsWithDates = data.map(u => ({
+                ...u,
+                tempStart: (() => {
+                    const d = new Date();
+                    return d.toISOString().slice(0, 10);  // Idag
+                })(),
+                tempEnd: (() => {
+                    const d = new Date();
+                    d.setDate(d.getDate() + 7);  // 7 dagar framåt från idag
+                    return d.toISOString().slice(0, 10);
+                })()
+            }));
+            setUnits(unitsWithDates);
         } catch (e) {
             setUnitsError(e?.message || "Kunde inte hämta lager.");
-            setUnits([]);
         } finally {
             setUnitsLoading(false);
         }
@@ -89,464 +125,339 @@ export default function App() {
 
     async function loadMyBookings() {
         setMyBookingsLoading(true);
-        setMyBookingsError("");
         try {
             const data = await apiFetch("/bookings/my");
             setMyBookings(Array.isArray(data) ? data : []);
         } catch (e) {
-            setMyBookingsError(e?.message || "Kunde inte hämta dina bokningar.");
-            setMyBookings([]);
+            console.error(e);
         } finally {
             setMyBookingsLoading(false);
         }
     }
 
+    useEffect(() => { loadUnits(); }, []);
+    useEffect(() => { if (isAuthed) loadMyBookings(); }, [isAuthed]);
+    
+    // Ladda current user info när man loggar in
     useEffect(() => {
-        // Ladda lager direkt vid start
-        loadUnits();
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
+        if (isAuthed) {
+            getCurrentUser()
+                .then(user => {
+                    console.log("👤 Current user:", user);
+                    setCurrentUser(user);
+                })
+                .catch(e => console.log("Could not load current user:", e));
+        } else {
+            setCurrentUser(null);
+        }
+    }, [token]);
+
+    function handleTempDateChange(unitId, field, value) {
+        setUnits(units.map(u => u.id === unitId ? { ...u, [field]: value } : u));
+    }
 
     function addToCart(unit) {
-        setErrorMsg("");
-        setSuccessMsg("");
-        setCart((prev) => {
-            if (prev.some((x) => x.id === unit.id)) return prev;
-            return [...prev, unit];
-        });
+        if (isDateOccupied(unit, unit.tempStart, unit.tempEnd)) {
+            window.alert('Datumen är tyvärr redan bokade för detta lager. Välj andra datum.');
+            setErrorMsg("❌ Datumen är tyvärr upptagna!");
+            setTimeout(() => setErrorMsg(""), 3000);
+            return;
+        }
+
+        if (!cart.find(u => u.id === unit.id)) {
+            const itemWithDates = {
+                ...unit,
+                specificStartDate: unit.tempStart,
+                specificEndDate: unit.tempEnd
+            };
+            setCart([...cart, itemWithDates]);
+            setSuccessMsg(`✅ ${unit.name} tillagd!`);
+            setTimeout(() => setSuccessMsg(""), 3000);
+        }
     }
 
     function removeFromCart(unitId) {
-        setCart((prev) => prev.filter((x) => x.id !== unitId));
+        setCart(cart.filter(u => u.id !== unitId));
+    }
+
+    function updateCartItemDate(itemId, field, value) {
+        setCart(cart.map(item =>
+            item.id === itemId ? { ...item, [field]: value } : item
+        ));
     }
 
     async function checkout() {
-        setErrorMsg("");
-        setSuccessMsg("");
-
-        if (!isAuthed) {
-            setErrorMsg("Du måste vara inloggad för att boka.");
-            setView("login");
-            return;
-        }
-
-        if (cart.length === 0) {
-            setErrorMsg("Varukorgen är tom.");
-            return;
-        }
-
-        if (!startDate || !endDate) {
-            setErrorMsg("Välj start- och slutdatum.");
-            return;
-        }
-
-        if (rentalDays <= 0) {
-            setErrorMsg("Slutdatum måste vara efter startdatum.");
-            return;
-        }
-
+        if (cart.length === 0) return;
         setSubmitLoading(true);
         try {
-            const body = {
-                storageUnitIds: cart.map((x) => x.id),
-                startDate,
-                endDate,
-            };
-
-            await apiFetch("/bookings", {
+            const items = cart.map(item => ({
+                storageUnitId: item.id,
+                startDate: item.specificStartDate,
+                endDate: item.specificEndDate
+            }));
+            const result = await apiFetch("/bookings", {
                 method: "POST",
-                body: JSON.stringify(body),
+                body: JSON.stringify({ items: items }),
             });
-
-            setSuccessMsg("Bokning skapad ✅");
+            setLatestBooking(result);
             setCart([]);
-            // uppdatera “mina bokningar” direkt
+            await loadUnits(); // VIKTIGT: Hämta om allt för att se nya bokningar direkt
             await loadMyBookings();
-            setView("bookings");
+            setView("payment");
         } catch (e) {
-            setErrorMsg(e?.message || "Kunde inte skapa bokningen.");
+            console.error("❌ Checkout misslyckades:", e);
+            setErrorMsg(`Fel: ${e?.message || "Kunde inte slutföra bokningen."}`);
+            setTimeout(() => setErrorMsg(""), 4000);
         } finally {
             setSubmitLoading(false);
         }
     }
 
-    async function doLogin(e) {
-        e.preventDefault();
-        setErrorMsg("");
-        setSuccessMsg("");
-
+    async function handleLogin() {
+        if (!loginEmail || !loginPassword) return;
+        setSubmitLoading(true);
         try {
-            const res = await apiFetch("/auth/login", {
+            const result = await apiFetch("/auth/login", {
                 method: "POST",
                 body: JSON.stringify({ email: loginEmail, password: loginPassword }),
             });
-
-            const t = res?.token;
-            if (!t) throw new Error("Inget token returnerades.");
-
-            setToken(t);
-            setTokenState(t);
-
-            setSuccessMsg("Inloggad ✅");
-            // när man loggar in: ladda om lager + mina bokningar
-            await loadUnits();
-            await loadMyBookings();
+            setToken(result.token); setTokenState(result.token);
             setView("lager");
-        } catch (e2) {
-            setErrorMsg(e2?.message || "Fel vid inloggning.");
-        }
-    }
-
-    async function doRegister(e) {
-        e.preventDefault();
-        setErrorMsg("");
-        setSuccessMsg("");
-
-        try {
-            const res = await apiFetch("/auth/register", {
-                method: "POST",
-                body: JSON.stringify({
-                    email: regEmail,
-                    password: regPassword,
-                    fullName: regFullName,
-                }),
-            });
-
-            const t = res?.token;
-            if (!t) throw new Error("Inget token returnerades.");
-
-            setToken(t);
-            setTokenState(t);
-
-            setSuccessMsg("Konto skapat & inloggad ✅");
-            await loadUnits();
-            await loadMyBookings();
-            setView("lager");
-        } catch (e2) {
-            setErrorMsg(e2?.message || "Fel vid registrering.");
-        }
+        } catch (e) { setErrorMsg(e?.message || "Inloggningsfel"); setTimeout(() => setErrorMsg(""), 4000); } finally { setSubmitLoading(false); }
     }
 
     function logout() {
-        clearToken();
-        setTokenState("");
-        setCart([]);
-        setMyBookings([]);
-        setSuccessMsg("Utloggad.");
-        setErrorMsg("");
-        setView("lager");
+        clearToken(); setTokenState(""); setCart([]); setView("lager");
     }
 
+    async function handleIotAction(storageUnitId, action) {
+        const actionKey = `${action}-${storageUnitId}`;
+        setIotLoading(actionKey);
+        try {
+            await apiFetch(`/iot/storage-units/${storageUnitId}/${action}`, { method: "POST" });
+            setIotResult({ success: true, message: action === "open" ? "🔓 Öppnat!" : "🔒 Låst!" });
+            // Uppdatera lock-status
+            setLockStatus(prev => ({ ...prev, [storageUnitId]: action === "open" ? true : false }));
+            setTimeout(() => setIotResult(null), 3000);
+        } catch (e) { setIotResult({ success: false, message: "❌ IoT-fel" }); setTimeout(() => setIotResult(null), 3000); } finally { setIotLoading(null); }
+    }
+
+    const toastBottomStyle = {
+        position: 'fixed', bottom: '20px', left: '50%', transform: 'translateX(-50%)',
+        zIndex: 9999, padding: '12px 24px', borderRadius: '8px', color: 'white',
+        fontWeight: 'bold', boxShadow: '0 4px 12px rgba(0,0,0,0.15)', minWidth: '200px', textAlign: 'center'
+    };
+
     return (
-        <div className="page">
-            <header className="topbar">
-                <div className="brand">
-                    <div className="brand__title">LagerLyft</div>
-                    <div className="brand__subtitle">Uthyrning av lagerytmen — boka enkelt</div>
+        <div className="app">
+            <header className="header">
+                <div className="header-content">
+                    <h1 className="logo" onClick={() => setView("lager")}>🏢 Lagerlyft</h1>
+                    <nav className="nav">
+                        <button className={`nav-btn ${view === "lager" ? "active" : ""}`} onClick={() => setView("lager")}>Lagerlista</button>
+                        <button className={`nav-btn ${view === "bookings" ? "active" : ""}`} onClick={() => setView("bookings")}>Mina Bokningar</button>
+                        <button className={`nav-btn ${view === "cart" ? "active" : ""}`} onClick={() => setView("cart")}>🛒 Varukorg {cart.length > 0 && <span>({cart.length})</span>}</button>
+                        {currentUser?.role === "ADMIN" && <button className={`nav-btn ${view === "admin" ? "active" : ""}`} onClick={() => setView("admin")}>⚙️ Admin</button>}
+                        {isAuthed ? <button className="nav-btn" onClick={logout}>🚪 Logga ut</button> :
+                            <button className="nav-btn" onClick={() => setView("login")}>🔐 Logga in</button>}
+                    </nav>
                 </div>
-
-                <nav className="nav">
-                    <button className={`nav__btn ${view === "lager" ? "is-active" : ""}`} onClick={() => setView("lager")}>
-                        Lager
-                    </button>
-
-                    <button
-                        className={`nav__btn ${view === "bookings" ? "is-active" : ""}`}
-                        onClick={() => {
-                            setView("bookings");
-                            if (isAuthed) loadMyBookings();
-                        }}
-                        disabled={!isAuthed}
-                        title={!isAuthed ? "Logga in för att se dina bokningar" : ""}
-                    >
-                        Mina bokningar
-                    </button>
-
-                    {!isAuthed ? (
-                        <>
-                            <button className={`nav__btn ${view === "login" ? "is-active" : ""}`} onClick={() => setView("login")}>
-                                Logga in
-                            </button>
-                            <button
-                                className={`nav__btn ${view === "register" ? "is-active" : ""}`}
-                                onClick={() => setView("register")}
-                            >
-                                Skapa konto
-                            </button>
-                        </>
-                    ) : (
-                        <button className="nav__btn" onClick={logout}>
-                            Logga ut
-                        </button>
-                    )}
-                </nav>
             </header>
 
-            {(errorMsg || successMsg) && (
-                <div className="flash">
-                    {errorMsg && <div className="flash__error">Error: {errorMsg}</div>}
-                    {successMsg && <div className="flash__ok">{successMsg}</div>}
-                </div>
-            )}
+            {successMsg && <div style={{...toastBottomStyle, background: '#28a745'}}>{successMsg}</div>}
+            {errorMsg && <div style={{...toastBottomStyle, background: '#dc3545'}}>{errorMsg}</div>}
+            {iotResult && <div style={{...toastBottomStyle, background: iotResult.success ? '#28a745' : '#dc3545'}}>{iotResult.message}</div>}
 
             <main className="content">
                 {view === "lager" && (
-                    <>
-                        <section className="card">
-                            <div className="card__head">
-                                <h2>Tillgängliga lager</h2>
-                                <div className="card__actions">
-                                    <button className="btn" onClick={loadUnits} disabled={unitsLoading}>
-                                        {unitsLoading ? "Hämtar..." : "Uppdatera"}
-                                    </button>
-                                </div>
-                            </div>
+                    <section className="section">
+                        <h2>📦 1. Välj ett lagerutrymme</h2>
+                        <div className="grid">
+                            {units.map((u) => {
+                                const days = daysBetween(u.tempStart, u.tempEnd);
+                                const isInCart = cart.find(c => c.id === u.id);
+                                const isOccupied = isDateOccupied(u, u.tempStart, u.tempEnd);
 
-                            {!isAuthed && (
-                                <div className="hint">
-                                    För att boka behöver du vara inloggad.
-                                </div>
-                            )}
+                                return (
+                                    <div key={u.id} className={`card ${isInCart ? "selected-card" : ""}`}>
+                                        <div style={{ textAlign: 'center', marginBottom: '10px' }}>📦</div>
+                                        <h3 style={{ marginTop: '0' }}>{u.name}</h3>
+                                        <p style={{ fontSize: '0.9rem', color: '#666' }}>{u.description}</p>
+                                        <div style={{ margin: '15px 0', borderTop: '1px solid #eee', paddingTop: '15px' }}>
+                                            <div>📐 <strong>Storlek: {u.sizeM2} m²</strong></div>
+                                            <div>📍 Plats: {u.location}</div>
+                                            <div style={{ color: '#28a745', fontWeight: 'bold' }}>💰 {formatMoney(u.pricePerDay)} kr/dag</div>
+                                        </div>
 
-                            <div className="dates">
-                                <div className="field">
-                                    <label>Startdatum</label>
-                                    <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
-                                </div>
-                                <div className="field">
-                                    <label>Slutdatum</label>
-                                    <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
-                                </div>
-                                <div className="field field--small">
-                                    <label>Dagar</label>
-                                    <div className="stat">{rentalDays}</div>
-                                </div>
-                            </div>
-
-                            {unitsError && <div className="errorText">{unitsError}</div>}
-
-                            <ul className="list">
-                                {units.map((u) => (
-                                    <li key={u.id} className="list__row">
-                                        <div className="list__main">
-                                            <div className="list__title">
-                                                <strong>{u.name}</strong>{" "}
-                                                <span className="muted">— {u.location}</span>
-                                            </div>
-                                            <div className="list__meta">
-                                                <Badge tone={u.active ? "ok" : "neutral"}>{u.active ? "Aktiv" : "Inaktiv"}</Badge>
-                                                <span className="muted">• {u.sizeM2} m²</span>
-                                                <span className="muted">• {formatMoney(u.pricePerDay)} / dag</span>
+                                        <div className="card-date-picker">
+                                            <label style={{fontSize: '0.7rem', fontWeight: 'bold'}}>FRÅN</label>
+                                            <input
+                                                type="date"
+                                                value={u.tempStart}
+                                                onChange={(e) => handleTempDateChange(u.id, 'tempStart', e.target.value)}
+                                                style={{ borderLeft: isOccupied ? '5px solid #dc3545' : '5px solid #28a745' }}
+                                            />
+                                            <label style={{fontSize: '0.7rem', fontWeight: 'bold', marginTop: '10px', display: 'block'}}>TILL</label>
+                                            <input
+                                                type="date"
+                                                value={u.tempEnd}
+                                                onChange={(e) => handleTempDateChange(u.id, 'tempEnd', e.target.value)}
+                                                style={{ borderLeft: isOccupied ? '5px solid #dc3545' : '5px solid #28a745' }}
+                                            />
+                                            <div style={{marginTop: '5px', fontSize: '0.7rem', textAlign: 'right', color: isOccupied ? '#dc3545' : '#28a745'}}>
+                                                {isOccupied ? "❌ Redan bokat" : `✓ Ledigt`}
                                             </div>
                                         </div>
 
-                                        <button className="btn btn--ghost" onClick={() => addToCart(u)} disabled={!u.active}>
-                                            Lägg till
-                                        </button>
-                                    </li>
-                                ))}
-
-                                {(!unitsLoading && units.length === 0) && (
-                                    <li className="list__empty">Inga lager hittades.</li>
-                                )}
-                            </ul>
-                        </section>
-
-                        <section className="grid">
-                            <div className="card">
-                                <div className="card__head">
-                                    <h2>Varukorg</h2>
-                                </div>
-
-                                {cart.length === 0 ? (
-                                    <div className="muted">Varukorgen är tom.</div>
-                                ) : (
-                                    <ul className="list">
-                                        {cart.map((u) => (
-                                            <li key={u.id} className="list__row">
-                                                <div className="list__main">
-                                                    <div className="list__title">
-                                                        <strong>{u.name}</strong> <span className="muted">({formatMoney(u.pricePerDay)} / dag)</span>
-                                                    </div>
-                                                    <div className="list__meta muted">{u.location}</div>
-                                                </div>
-                                                <button className="btn btn--ghost" onClick={() => removeFromCart(u.id)}>
-                                                    Ta bort
-                                                </button>
-                                            </li>
-                                        ))}
-                                    </ul>
-                                )}
-                            </div>
-
-                            <div className="card">
-                                <div className="card__head">
-                                    <h2>Sammanfattning</h2>
-                                </div>
-
-                                <div className="summary">
-                                    <div className="summary__row">
-                                        <span>Antal lager</span>
-                                        <strong>{cart.length}</strong>
+                                        {isAuthed ? (
+                                            <button
+                                                className={`btn-add-new ${isInCart ? "in-cart" : ""}`}
+                                                onClick={() => addToCart(u)}
+                                                disabled={!u.tempStart || !u.tempEnd || new Date(u.tempEnd) < new Date(u.tempStart) || isOccupied}
+                                            >
+                                                {isOccupied ? "Fullbokat" : (isInCart ? "✅ I varukorg" : "Lägg till")}
+                                            </button>
+                                        ) : <p style={{ fontSize: '0.8rem', textAlign: 'center', color: '#666' }}>🔐 Logga in för att boka</p>}
                                     </div>
-                                    <div className="summary__row">
-                                        <span>Dagar</span>
-                                        <strong>{rentalDays}</strong>
-                                    </div>
-                                    <div className="summary__row">
-                                        <span>Totalt</span>
-                                        <strong>{formatMoney(totalPrice)}</strong>
-                                    </div>
-                                </div>
-
-                                <button className="btn btn--primary" onClick={checkout} disabled={submitLoading}>
-                                    {submitLoading ? "Skickar..." : "Boka nu"}
-                                </button>
-                            </div>
-                        </section>
-                    </>
+                                );
+                            })}
+                        </div>
+                    </section>
                 )}
 
-                {view === "bookings" && (
-                    <section className="card">
-                        <div className="card__head">
-                            <h2>Mina bokningar</h2>
-                            <div className="card__actions">
-                                <button className="btn" onClick={loadMyBookings} disabled={!isAuthed || myBookingsLoading}>
-                                    {myBookingsLoading ? "Hämtar..." : "Uppdatera"}
+                {view === "cart" && (
+                    <section className="section">
+                        <div className="cart-layout">
+                            <div style={{background: 'white', padding: '2rem', borderRadius: '12px', border: '1px solid #eee'}}>
+                                <h2>🛒 Min Varukorg</h2>
+                                {cart.length === 0 ? <p>Din varukorg är tom.</p> : cart.map((item) => (
+                                    <div key={item.id} className="cart-card" style={{padding: '1.5rem 0', borderBottom: '1px solid #eee'}}>
+                                        <div style={{display:'flex', justifyContent:'space-between', alignItems: 'start'}}>
+                                            <div>
+                                                <h3 style={{margin: 0}}>{item.name}</h3>
+                                                <p style={{fontSize: '0.8rem', color: '#666'}}>{item.location} • {item.sizeM2} m²</p>
+                                            </div>
+                                            <button onClick={() => removeFromCart(item.id)} style={{color:'#ff4d4d', border:'none', background:'none', cursor:'pointer', fontWeight: 'bold'}}>✕ Ta bort</button>
+                                        </div>
+                                        <div style={{display:'flex', gap:'15px', marginTop: '15px'}}>
+                                            <div style={{flex: 1}}>
+                                                <label style={{fontSize:'0.7rem', fontWeight: 'bold'}}>FRÅN</label>
+                                                <input type="date" value={item.specificStartDate} onChange={(e) => updateCartItemDate(item.id, 'specificStartDate', e.target.value)} />
+                                            </div>
+                                            <div style={{flex: 1}}>
+                                                <label style={{fontSize:'0.7rem', fontWeight: 'bold'}}>TILL</label>
+                                                <input type="date" value={item.specificEndDate} onChange={(e) => updateCartItemDate(item.id, 'specificEndDate', e.target.value)} />
+                                            </div>
+                                            <div style={{ textAlign: 'right', minWidth: '80px' }}>
+                                                <div style={{fontSize: '0.7rem', color: '#2563eb'}}>{daysBetween(item.specificStartDate, item.specificEndDate)} dagar</div>
+                                                <div style={{fontWeight: 'bold'}}>{formatMoney(item.pricePerDay * daysBetween(item.specificStartDate, item.specificEndDate))} kr</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+
+                            <div className="cart-summary">
+                                <h3>📊 Sammanfattning</h3>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', margin: '20px 0' }}>
+                                    <span style={{ fontWeight: 'bold' }}>TOTALT:</span>
+                                    <h2 style={{color: '#28a745', margin: 0}}>{formatMoney(cart.reduce((sum, i) => sum + (i.pricePerDay * daysBetween(i.specificStartDate, i.specificEndDate)), 0))} kr</h2>
+                                </div>
+                                <button className="btn-add-new" style={{width:'100%', background: '#111827'}} onClick={checkout} disabled={cart.length === 0}>
+                                    ✅ Bekräfta & Boka
                                 </button>
                             </div>
                         </div>
+                    </section>
+                )}
 
-                        {!isAuthed ? (
-                            <div className="hint">Logga in för att se dina bokningar.</div>
-                        ) : (
-                            <>
-                                {myBookingsError && <div className="errorText">{myBookingsError}</div>}
+                {view === "payment" && (
+                    <section className="section" style={{maxWidth: '500px', margin: '0 auto'}}>
+                        <div className="card" style={{textAlign: 'center', padding: '3rem'}}>
+                            <h2>Betalning</h2>
+                            <h2 style={{color: '#28a745'}}>{formatMoney(latestBooking?.totalPrice)} kr</h2>
+                            <button className="btn-add-new" style={{width: '100%'}} onClick={() => setView("bookings")}>Betala</button>
+                        </div>
+                    </section>
+                )}
 
-                                <ul className="list">
-                                    {myBookings.map((b) => (
-                                        <li key={b.id} className="booking">
-                                            <div className="booking__top">
-                                                <div>
-                                                    <div className="booking__title">
-                                                        Bokning #{b.id}{" "}
-                                                        <Badge tone={b.status === "PENDING" ? "neutral" : "ok"}>
-                                                            {b.status || "OK"}
-                                                        </Badge>
-                                                    </div>
-                                                    <div className="muted">
-                                                        {b.startDate} → {b.endDate}
-                                                    </div>
+                {view === "bookings" && isAuthed && (
+                    <section className="section">
+                        <h2>📋 Mina Bokningar</h2>
+                        {myBookings.map((b) => {
+                            // Kontrollera om bokningsperioden är giltig (är vi inom datumen?)
+                            const today = new Date().toISOString().slice(0, 10);
+                            const isWithinBookingPeriod = today >= b.startDate && today <= b.endDate;
+
+                            return (
+                                <div key={b.id} className="booking-card">
+                                    <h3>Bokning #{b.id} ({b.startDate} → {b.endDate})</h3>
+                                    {b.items?.map(it => {
+                                        // Debug: se vad vi får från backend
+                                        console.log("📦 BookingItem data:", { it, storageUnitId: it.storageUnitId, unitName: it.storageUnit?.name });
+                                        const unitId = it.storageUnitId;
+                                        const isOpen = lockStatus[unitId] === true; // true = öppen/upplåst
+                                        const isClosed = lockStatus[unitId] === false; // false = låst/stängd
+                                        
+                                        // Endast visa knappar om vi är inom bokningsperioden
+                                        if (!isWithinBookingPeriod) {
+                                            return (
+                                                <div key={it.id} className="item-row">
+                                                    <span>📦 {it.storageUnit?.name || "Okänd enhet"}</span>
+                                                    <span style={{ fontSize: '0.8rem', color: '#999' }}>Låsning tillgänglig: {b.startDate} → {b.endDate}</span>
                                                 </div>
-
-                                                <div className="booking__price">
-                                                    {formatMoney(b.totalPrice)}
+                                            );
+                                        }
+                                        
+                                        return (
+                                            <div key={it.id} className="item-row">
+                                                <span>📦 {it.storageUnit?.name || "Okänd enhet"}</span>
+                                                <div style={{ display: 'flex', gap: '10px' }}>
+                                                    {isClosed || lockStatus[unitId] === undefined ? (
+                                                        <button 
+                                                            className="btn-iot" 
+                                                            onClick={() => handleIotAction(unitId, "open")}
+                                                            disabled={!unitId}
+                                                        >
+                                                            🔓 Lås upp
+                                                        </button>
+                                                    ) : null}
+                                                    {isOpen ? (
+                                                        <button 
+                                                            className="btn-iot" 
+                                                            onClick={() => handleIotAction(unitId, "lock")}
+                                                            disabled={!unitId}
+                                                            style={{ background: '#666' }}
+                                                        >
+                                                            🔒 Låsa
+                                                        </button>
+                                                    ) : null}
                                                 </div>
                                             </div>
-
-                                            {Array.isArray(b.items) && b.items.length > 0 && (
-                                                <div className="booking__items">
-                                                    <div className="muted">Lager:</div>
-                                                    <ul className="chips">
-                                                        {b.items.map((it) => (
-                                                            <li key={it.id} className="chip">
-                                                                #{it.storageUnitId ?? it.storageUnit?.id ?? "?"}{" "}
-                                                                {it.storageUnit?.name ? `• ${it.storageUnit.name}` : ""}
-                                                            </li>
-                                                        ))}
-                                                    </ul>
-                                                </div>
-                                            )}
-                                        </li>
-                                    ))}
-
-                                    {(!myBookingsLoading && myBookings.length === 0) && (
-                                        <li className="list__empty">Inga bokningar än.</li>
-                                    )}
-                                </ul>
-                            </>
-                        )}
+                                        );
+                                    })}
+                                </div>
+                            );
+                        })}
                     </section>
                 )}
 
                 {view === "login" && (
-                    <section className="card card--narrow">
-                        <div className="card__head">
-                            <h2>Logga in</h2>
+                    <section className="section" style={{maxWidth:'400px', margin:'auto'}}>
+                        <div className="card">
+                            <h2>🔐 Logga in</h2>
+                            <input type="email" placeholder="Email" style={{width: '100%', marginBottom: '10px', padding: '10px'}} onChange={(e) => setLoginEmail(e.target.value)} />
+                            <input type="password" placeholder="Lösenord" style={{width: '100%', marginBottom: '10px', padding: '10px'}} onChange={(e) => setLoginPassword(e.target.value)} />
+                            <button className="btn-add-new" onClick={handleLogin}>Logga in</button>
                         </div>
-
-                        <form className="form" onSubmit={doLogin}>
-                            <div className="field">
-                                <label>Email</label>
-                                <input value={loginEmail} onChange={(e) => setLoginEmail(e.target.value)} placeholder="email" />
-                            </div>
-
-                            <div className="field">
-                                <label>Lösenord</label>
-                                <input
-                                    type="password"
-                                    value={loginPassword}
-                                    onChange={(e) => setLoginPassword(e.target.value)}
-                                    placeholder="lösenord"
-                                />
-                            </div>
-
-                            <button className="btn btn--primary" type="submit">
-                                Logga in
-                            </button>
-
-                            <div className="muted">
-                                Har du inget konto?{" "}
-                                <button type="button" className="link" onClick={() => setView("register")}>
-                                    Skapa konto
-                                </button>
-                            </div>
-                        </form>
                     </section>
                 )}
 
-                {view === "register" && (
-                    <section className="card card--narrow">
-                        <div className="card__head">
-                            <h2>Skapa konto</h2>
-                        </div>
-
-                        <form className="form" onSubmit={doRegister}>
-                            <div className="field">
-                                <label>Fullständigt namn</label>
-                                <input value={regFullName} onChange={(e) => setRegFullName(e.target.value)} placeholder="Namn" />
-                            </div>
-
-                            <div className="field">
-                                <label>Email</label>
-                                <input value={regEmail} onChange={(e) => setRegEmail(e.target.value)} placeholder="email" />
-                            </div>
-
-                            <div className="field">
-                                <label>Lösenord</label>
-                                <input
-                                    type="password"
-                                    value={regPassword}
-                                    onChange={(e) => setRegPassword(e.target.value)}
-                                    placeholder="lösenord"
-                                />
-                            </div>
-
-                            <button className="btn btn--primary" type="submit">
-                                Skapa konto
-                            </button>
-
-                            <div className="muted">
-                                Har du redan konto?{" "}
-                                <button type="button" className="link" onClick={() => setView("login")}>
-                                    Logga in
-                                </button>
-                            </div>
-                        </form>
-                    </section>
+                {view === "admin" && currentUser?.role === "ADMIN" && (
+                    <AdminPanel onRefresh={() => { loadUnits(); }} />
                 )}
             </main>
+            <footer className="footer" style={{ marginTop: 'auto' }}>© 2026 Lagerlyft</footer>
         </div>
     );
 }

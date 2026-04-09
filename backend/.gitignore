@@ -1,0 +1,46 @@
+# Maven
+target/
+.classpath
+.project
+.settings/
+*.class
+*.jar
+*.war
+*.ear
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+*.iml
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Logs
+*.log
+logs/
+
+# Temporary
+*.tmp
+*.temp
+
+# System
+.DS_Store
+thumbs.db
+
+# Build output
+build/
+dist/
+
+# Test coverage
+site/
+jacoco.exec
+
+# Application config (keep if you want to version it)
+# production/
+
