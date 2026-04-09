@@ -11,6 +11,29 @@ En fullstack-applikation för att hyra ut lagerutrymmen. Projektet är byggt med
 
 ---
 
+## ⚡ Starta projektet på en ny enhet
+
+**Förutsättningar:** Docker och Node.js måste vara installerade
+
+**Terminal 1:**
+```bash
+cd docker
+docker-compose up
+```
+
+**Terminal 2 (ny terminal i samma mapp):**
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+**Login:**
+- Email: `admin@gmail.com`
+- Lösenord: `admin123`
+
+---
+
 ## 🚀 Snabbstart
 
 ### Förutsättningar

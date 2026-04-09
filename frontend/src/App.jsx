@@ -24,7 +24,9 @@ function Badge({ tone = "neutral", children }) {
 }
 
 export default function App() {
-    const [view, setView] = useState("lager");
+    // Om inget token finns, börja på auth-sidan, annars på lager-sidan
+    const [view, setView] = useState(getToken() ? "lager" : "auth");
+    const [authMode, setAuthMode] = useState("login"); // "login" eller "register"
     const [token, setTokenState] = useState(() => getToken() || "");
     const isAuthed = !!token;
 
@@ -226,8 +228,31 @@ export default function App() {
         } catch (e) { setErrorMsg(e?.message || "Inloggningsfel"); setTimeout(() => setErrorMsg(""), 4000); } finally { setSubmitLoading(false); }
     }
 
+    async function handleRegister() {
+        if (!regEmail || !regPassword || !regFullName) {
+            setErrorMsg("Alla fält måste fyllas i");
+            setTimeout(() => setErrorMsg(""), 4000);
+            return;
+        }
+        setSubmitLoading(true);
+        try {
+            const result = await apiFetch("/auth/register", {
+                method: "POST",
+                body: JSON.stringify({ email: regEmail, password: regPassword, fullName: regFullName }),
+            });
+            setToken(result.token); 
+            setTokenState(result.token);
+            setView("lager");
+        } catch (e) { 
+            setErrorMsg(e?.message || "Registreringsfel"); 
+            setTimeout(() => setErrorMsg(""), 4000); 
+        } finally { 
+            setSubmitLoading(false); 
+        }
+    }
+
     function logout() {
-        clearToken(); setTokenState(""); setCart([]); setView("lager");
+        clearToken(); setTokenState(""); setCart([]); setView("auth"); setAuthMode("login");
     }
 
     async function handleIotAction(storageUnitId, action) {
@@ -252,15 +277,16 @@ export default function App() {
         <div className="app">
             <header className="header">
                 <div className="header-content">
-                    <h1 className="logo" onClick={() => setView("lager")}>🏢 Lagerlyft</h1>
+                    <h1 className="logo" onClick={() => isAuthed && setView("lager")}>🏢 Lagerlyft</h1>
+                    {isAuthed && (
                     <nav className="nav">
                         <button className={`nav-btn ${view === "lager" ? "active" : ""}`} onClick={() => setView("lager")}>Lagerlista</button>
                         <button className={`nav-btn ${view === "bookings" ? "active" : ""}`} onClick={() => setView("bookings")}>Mina Bokningar</button>
                         <button className={`nav-btn ${view === "cart" ? "active" : ""}`} onClick={() => setView("cart")}>🛒 Varukorg {cart.length > 0 && <span>({cart.length})</span>}</button>
                         {currentUser?.role === "ADMIN" && <button className={`nav-btn ${view === "admin" ? "active" : ""}`} onClick={() => setView("admin")}>⚙️ Admin</button>}
-                        {isAuthed ? <button className="nav-btn" onClick={logout}>🚪 Logga ut</button> :
-                            <button className="nav-btn" onClick={() => setView("login")}>🔐 Logga in</button>}
+                        <button className="nav-btn" onClick={logout}>🚪 Logga ut</button>
                     </nav>
+                    )}
                 </div>
             </header>
 
@@ -442,13 +468,105 @@ export default function App() {
                     </section>
                 )}
 
-                {view === "login" && (
-                    <section className="section" style={{maxWidth:'400px', margin:'auto'}}>
+                {view === "auth" && (
+                    <section className="section" style={{maxWidth:'450px', margin:'auto', paddingTop: '60px'}}>
                         <div className="card">
-                            <h2>🔐 Logga in</h2>
-                            <input type="email" placeholder="Email" style={{width: '100%', marginBottom: '10px', padding: '10px'}} onChange={(e) => setLoginEmail(e.target.value)} />
-                            <input type="password" placeholder="Lösenord" style={{width: '100%', marginBottom: '10px', padding: '10px'}} onChange={(e) => setLoginPassword(e.target.value)} />
-                            <button className="btn-add-new" onClick={handleLogin}>Logga in</button>
+                            {authMode === "login" ? (
+                                <>
+                                    <h2>🔐 Logga in</h2>
+                                    <input 
+                                        type="email" 
+                                        placeholder="Email" 
+                                        value={loginEmail}
+                                        onChange={(e) => setLoginEmail(e.target.value)}
+                                        style={{width: '100%', marginBottom: '10px', padding: '10px', boxSizing: 'border-box'}} 
+                                    />
+                                    <input 
+                                        type="password" 
+                                        placeholder="Lösenord" 
+                                        value={loginPassword}
+                                        onChange={(e) => setLoginPassword(e.target.value)}
+                                        style={{width: '100%', marginBottom: '20px', padding: '10px', boxSizing: 'border-box'}} 
+                                    />
+                                    <button 
+                                        className="btn-add-new" 
+                                        onClick={handleLogin}
+                                        disabled={submitLoading}
+                                        style={{width: '100%'}}
+                                    >
+                                        {submitLoading ? "Loggar in..." : "Logga in"}
+                                    </button>
+                                    <div style={{textAlign: 'center', marginTop: '30px', paddingTop: '20px', borderTop: '1px solid #eee'}}>
+                                        <p style={{margin: '0 0 10px 0', color: '#666', fontSize: '0.9rem'}}>Ingen konto ännu?</p>
+                                        <button 
+                                            onClick={() => setAuthMode("register")}
+                                            style={{
+                                                background: 'none',
+                                                border: 'none',
+                                                color: '#2563eb',
+                                                fontSize: '1rem',
+                                                fontWeight: 'bold',
+                                                cursor: 'pointer',
+                                                textDecoration: 'underline',
+                                                padding: 0
+                                            }}
+                                        >
+                                            Klicka här för att skapa ett konto
+                                        </button>
+                                    </div>
+                                </>
+                            ) : (
+                                <>
+                                    <h2>📝 Skapa konto</h2>
+                                    <input 
+                                        type="text" 
+                                        placeholder="Fullständigt namn" 
+                                        value={regFullName}
+                                        onChange={(e) => setRegFullName(e.target.value)}
+                                        style={{width: '100%', marginBottom: '10px', padding: '10px', boxSizing: 'border-box'}} 
+                                    />
+                                    <input 
+                                        type="email" 
+                                        placeholder="Email" 
+                                        value={regEmail}
+                                        onChange={(e) => setRegEmail(e.target.value)}
+                                        style={{width: '100%', marginBottom: '10px', padding: '10px', boxSizing: 'border-box'}} 
+                                    />
+                                    <input 
+                                        type="password" 
+                                        placeholder="Lösenord" 
+                                        value={regPassword}
+                                        onChange={(e) => setRegPassword(e.target.value)}
+                                        style={{width: '100%', marginBottom: '20px', padding: '10px', boxSizing: 'border-box'}} 
+                                    />
+                                    <button 
+                                        className="btn-add-new" 
+                                        onClick={handleRegister}
+                                        disabled={submitLoading}
+                                        style={{width: '100%'}}
+                                    >
+                                        {submitLoading ? "Skapar konto..." : "Skapa konto"}
+                                    </button>
+                                    <div style={{textAlign: 'center', marginTop: '30px', paddingTop: '20px', borderTop: '1px solid #eee'}}>
+                                        <p style={{margin: '0 0 10px 0', color: '#666', fontSize: '0.9rem'}}>Redan medlem?</p>
+                                        <button 
+                                            onClick={() => setAuthMode("login")}
+                                            style={{
+                                                background: 'none',
+                                                border: 'none',
+                                                color: '#2563eb',
+                                                fontSize: '1rem',
+                                                fontWeight: 'bold',
+                                                cursor: 'pointer',
+                                                textDecoration: 'underline',
+                                                padding: 0
+                                            }}
+                                        >
+                                            Klicka här för att logga in
+                                        </button>
+                                    </div>
+                                </>
+                            )}
                         </div>
                     </section>
                 )}
