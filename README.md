@@ -11,26 +11,45 @@ En fullstack-applikation för att hyra ut lagerutrymmen. Projektet är byggt med
 
 ---
 
-## ⚡ Starta projektet på en ny enhet
+## ⚡ Starta projektet på en ny enhet (SNABBVERSION)
 
-**Förutsättningar:** Docker och Node.js måste vara installerade
+**Förutsättningar:** 
+- Docker Desktop installerad
+- Node.js installerad (v16+)
+- Git installerad (för att clona projektet)
 
-**Terminal 1:**
+**Steg-för-steg:**
+
+**1. Klona projektet**
+```bash
+git clone <repo-url>
+cd Lageruthyrning-Examen
+```
+
+**2. Starta databas och backend i Terminal 1**
 ```bash
 cd docker
 docker-compose up
 ```
+*Vänta tills du ser "Started LageruthyrningExamenApplication" i loggen*
 
-**Terminal 2 (ny terminal i samma mapp):**
+**3. Starta frontend i Terminal 2 (öppna ny terminal)**
 ```bash
 cd frontend
 npm install
 npm run dev
 ```
+*Vänta tills du ser "VITE v..." i loggen*
 
-**Login:**
-- Email: `admin@gmail.com`
-- Lösenord: `admin123`
+**4. Öppna webbläsaren**
+- Frontend: `http://localhost:5173`
+- Admin-panel: `http://localhost:8082` (PhpMyAdmin för databas)
+
+**5. Logga in som admin**
+- **Email:** `admin@gmail.com`
+- **Lösenord:** `admin123`
+
+Eller **skapa ett nytt konto** och logga in som vanlig användare.
 
 ---
 
@@ -44,22 +63,25 @@ npm run dev
 
 ---
 
-## 🐳 Docker Setup (Rekommenderat)
+## 🐳 Docker Setup (REKOMMENDERAT)
 
-Det enklaste sättet att köra hela systemet:
+**Det enklaste sättet att köra hela systemet:**
 
-### Start alla services
+### Terminal 1 - Start databas och backend
 ```bash
 cd docker
 docker-compose up
 ```
 
-Detta startar automatiskt:
-- ✅ **MySQL Database** (port 3307)
-- ✅ **PhpMyAdmin** (port 8082) - för databaskonfiguration
+Denna terminal visar loggar från:
+- ✅ **MySQL Database** (port 3307) 
+- ✅ **PhpMyAdmin** (port 8082) - databaskonfiguration
 - ✅ **Backend Spring Boot** (port 8080)
 
-**Du behöver bara starta frontend separat:**
+**Vänta tills du ser:** `Started LageruthyrningExamenApplication` i loggen
+
+### Terminal 2 - Start frontend
+Öppna en **ny terminal** i projektmappen och kör:
 ```bash
 cd frontend
 npm install
@@ -68,11 +90,21 @@ npm run dev
 
 Frontend körs på: **http://localhost:5173**
 
+**Vänta tills du ser:** `VITE v...` och `➜  Local: http://localhost:5173/`
+
+### Stänga Docker
+För att stoppa allt, gå till Terminal 1 och tryck `Ctrl+C`
+
 ---
 
-## 🔧 Manuell Setup (Utan Docker)
+## 🔧 Manuell Setup (Utan Docker - INTE REKOMMENDERAT)
 
-Om du vill köra backend lokalt utan Docker:
+Om du vill köra backend lokalt utan Docker behöver du:
+1. **MySQL 8** installerat och igång lokalt
+2. **Database** `lageruthyrning_db` skapad manuellt
+3. En separat terminal för backend
+
+> ⚠️ **Vi rekommenderar Docker** - det är mycket enklare!
 
 ### 1. Backend - Starta servern
 
@@ -90,10 +122,12 @@ java -jar target/Lageruthyrning-Examen-0.0.1-SNAPSHOT.jar
 Backend körs på: **http://localhost:8080**
 
 **Databaskonfiguration krävs för manuell körning:**
-- Host: `localhost:3307`
+- Host: `localhost:3307` (eller 3306 beroende på MySQL-setup)
 - Database: `lageruthyrning_db`
 - User: `lageruser`
 - Password: `lagerpass123`
+
+> 💡 **Tips:** Använd Docker istället - då behövs ingen manuell MySQL-installation!
 
 ### 2. Frontend - Starta webbläsaren
 
@@ -132,50 +166,76 @@ Logga in och klicka på "Admin Panel" för att komma till admin-vyn.
 
 ## 📊 Databasstruktur
 
-Databasen `lageruthyrning_db` innehåller:
+Databasen `lageruthyrning_db` skapas **automatiskt** av Hibernate när Docker startar (se `spring.jpa.hibernate.ddl-auto=create` i application.properties).
+
+Databasen innehåller:
 - **users** - Användarkonton (admin och customers)
 - **storage_units** - Lagerutrymmen för uthyrning
 - **bookings** - Bokningar från användare
 - **booking_items** - Individuella items/enheter i en bokning
 
-**Databastabeller:**
+### Seed-data (data.sql)
+
+Filen `backend/src/main/resources/data.sql` innehåller:
+- ✅ **En admin-användare** (`admin@gmail.com` / `admin123`)
+- ✅ **5 test-lagerutrymmen** med olika storlekar och priser
+
+Denna data läses in automatiskt vid varje start av Docker (på grund av `spring.sql.init.mode=always`). Det betyder att databasen nollställs och fylls med testdata varje gång.
+
+### Databastabeller (skapas automatiskt av Hibernate)
+
+**users**
 ```sql
-CREATE TABLE users (
-  id BIGINT PRIMARY KEY AUTO_INCREMENT,
-  email VARCHAR(255) UNIQUE NOT NULL,
-  password VARCHAR(255) NOT NULL,
-  role ENUM('ADMIN', 'CUSTOMER') DEFAULT 'CUSTOMER',
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE TABLE storage_units (
-  id BIGINT PRIMARY KEY AUTO_INCREMENT,
-  name VARCHAR(255) NOT NULL,
-  size_sqm DECIMAL(10,2) NOT NULL,
-  price_per_day DECIMAL(10,2) NOT NULL,
-  available BOOLEAN DEFAULT TRUE,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE TABLE bookings (
-  id BIGINT PRIMARY KEY AUTO_INCREMENT,
-  user_id BIGINT NOT NULL,
-  status ENUM('PENDING', 'CONFIRMED', 'COMPLETED', 'CANCELLED') DEFAULT 'PENDING',
-  total_price DECIMAL(10,2),
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  FOREIGN KEY (user_id) REFERENCES users(id)
-);
-
-CREATE TABLE booking_items (
-  id BIGINT PRIMARY KEY AUTO_INCREMENT,
-  booking_id BIGINT NOT NULL,
-  storage_unit_id BIGINT NOT NULL,
-  start_date DATE NOT NULL,
-  end_date DATE NOT NULL,
-  FOREIGN KEY (booking_id) REFERENCES bookings(id),
-  FOREIGN KEY (storage_unit_id) REFERENCES storage_units(id)
-);
+id (BIGINT, PRIMARY KEY)
+email (VARCHAR, UNIQUE)
+password (VARCHAR, hashed)
+full_name (VARCHAR)
+role (ENUM: 'ADMIN', 'CUSTOMER')
+created_at (TIMESTAMP)
 ```
+
+**storage_units**
+```sql
+id (BIGINT, PRIMARY KEY)
+name (VARCHAR)
+description (TEXT)
+size_m2 (DECIMAL)              -- Storlek i kvadratmeter
+price_per_day (DECIMAL)
+location (VARCHAR)
+is_active (BOOLEAN)
+created_at (TIMESTAMP)
+```
+
+**bookings**
+```sql
+id (BIGINT, PRIMARY KEY)
+user_id (BIGINT, FOREIGN KEY)
+payment_status (ENUM: 'PENDING', 'COMPLETED')
+total_price (DECIMAL)
+created_at (TIMESTAMP)
+```
+
+**booking_items**
+```sql
+id (BIGINT, PRIMARY KEY)
+booking_id (BIGINT, FOREIGN KEY)
+storage_unit_id (BIGINT, FOREIGN KEY)
+start_date (DATE)
+end_date (DATE)
+```
+
+---
+
+## 🔄 Hur data hanteras
+
+### Vid varje Docker-start
+1. Hibernate skapar alla tabeller (från Entity-klasser)
+2. Spring läser `data.sql` och fyller databasen med testdata
+3. Gamla data raderas före ny seed (använd `SET FOREIGN_KEY_CHECKS`)
+
+### Test-data som initieras
+- **Admin-användare:** `admin@gmail.com` (lösenord: `admin123`, hashed)
+- **5 lagerutrymmen:** Olika storlekar (15-100 m²) och priser (149-599 kr/dag)
 
 ---
 
@@ -276,8 +336,10 @@ Lageruthyrning-Examen/
   ```json
   {
     "name": "Lagerrum A1",
+    "description": "Litet lagerutrymme",
     "sizeSqm": 50.0,
-    "pricePerDay": 199.99
+    "pricePerDay": 199.99,
+    "location": "Malmö"
   }
   ```
 
@@ -361,57 +423,95 @@ docker-compose build
 
 ---
 
-## 🔑 Miljövariabler
+## 🔑 Miljövariabler & Konfiguration
 
-### Backend (`backend/src/main/resources/application.properties`)
+### Backend Configuration (`backend/src/main/resources/application.properties`)
+
 ```properties
+# Server
 server.port=8080
-spring.datasource.url=jdbc:mysql://localhost:3307/lageruthyrning_db
+
+# Database (när körning via Docker)
+spring.datasource.url=jdbc:mysql://lager_db:3306/lageruthyrning_db?useSSL=false&serverTimezone=UTC
 spring.datasource.username=lageruser
 spring.datasource.password=lagerpass123
-app.jwt.secret=YOUR_VERY_LONG_RANDOM_SECRET_MUST_BE_AT_LEAST_64_CHARS
+
+# Hibernate - Skapar tabeller automatiskt vid start
+spring.jpa.hibernate.ddl-auto=create
+spring.sql.init.mode=always
+spring.jpa.defer-datasource-initialization=true
+
+# JWT Secret (för autentisering)
+app.jwt.secret=YOUR_VERY_LONG_RANDOM_SECRET_FOR_DEVELOPMENT_ONLY_MUST_BE_AT_LEAST_64_CHARS
+
+# Logging
+logging.level.root=INFO
+logging.level.se.gritacademy.lageruthyrningexamen=DEBUG
 ```
 
-### Docker (`docker/docker-compose.yml`)
+### Förklaring av viktiga inställningar:
+
+- **`spring.jpa.hibernate.ddl-auto=create`** - Hibernate skapar alla tabeller automatiskt vid start. **Databasen nollställs varje gång!**
+- **`spring.sql.init.mode=always`** - Kör `data.sql` automatiskt efter tabell-skapandet
+- **`lager_db:3306`** - Det är DNS-namn inom Docker-nätverket (inte localhost!)
+
+### Docker Configuration (`docker/docker-compose.yml`)
+
 ```yaml
-MYSQL_ROOT_PASSWORD: root
 MYSQL_DATABASE: lageruthyrning_db
 MYSQL_USER: lageruser
 MYSQL_PASSWORD: lagerpass123
-JWT_SECRET: YOUR_VERY_LONG_RANDOM_SECRET_MUST_BE_AT_LEAST_64_CHARS
+
+# Portar:
+# - MySQL: 3307 (externt) → 3306 (internt)
+# - PhpMyAdmin: 8082
+# - Backend: 8080
 ```
+
+### Frontend Configuration (`frontend/src/api.js`)
+
+```javascript
+const API_BASE = "http://localhost:8080"; // Backend URL
+```
+
+> ✅ **Frontend kommunicerar alltid med Backend på port 8080**
 
 ---
 
 ## 🐛 Troubleshooting
 
+### "MySQL command not recognized"
+**Problem:** `mysql: The term 'mysql' is not recognized...`
+
+**Lösning:** Du behöver inte installera MySQL manuellt! Använd Docker istället:
+```bash
+cd docker
+docker-compose up
+```
+Docker startar MySQL automatiskt. Du behöver bara Node.js och Docker.
+
 ### Frontend kan inte ansluta till backend (ERR_CONNECTION_REFUSED)
 **Problem:** `Failed to load resource: :8080/api/... net::ERR_CONNECTION_REFUSED`
 
 **Lösning:**
-1. Kontrollera att backend körs på port 8080
-2. Verifiera databaskonfiguration i `application.properties`
-3. Kolla att Docker-nätverket är konfigurerat korrekt
-4. Starta om backend och frontend
+1. Kontrollera att Terminal 1 kör `docker-compose up` och visar "Started LageruthyrningExamenApplication"
+2. Verifiera att backend körs på port 8080 (kolla Docker-loggen)
+3. Starta om Docker: `docker-compose down` och sedan `docker-compose up`
 
-### Databaskonfigurationsfel
-**Problem:** `Communications link failure with host localhost:3307`
+### Databaskonfigurationsfel (Connection refused)
+**Problem:** `Communications link failure` eller `Connection refused`
 
 **Lösning:**
-1. Verifiera att MySQL körs: `docker ps | grep lager_db`
-2. Starta Docker: `docker-compose up -d`
-3. Kontrollera portkonfiguration (standard: 3307)
-4. Se databasprompt på http://localhost:8082
+1. Kontrollera att Docker är igång: `docker ps`
+2. Verifiera Docker-loggen visar att MySQL är startad
+3. Starta om Docker: `docker-compose down -v` (radera volymen), sedan `docker-compose up`
 
 ### Port redan i användning
 **Problem:** `Port 8080 already in use` eller liknande
 
-**Lösning:**
+**Lösning (Windows):**
 ```bash
-# Hitta process som använder porten (Windows)
 netstat -ano | findstr :8080
-
-# Stäng processen
 taskkill /PID <PID> /F
 ```
 
@@ -419,20 +519,20 @@ taskkill /PID <PID> /F
 **Problem:** `401 Unauthorized` på alla autentiserade requests
 
 **Lösning:**
-1. Kontrollera `app.jwt.secret` är samma överallt
-2. Se till att token skickas i Authorization-headern: `Authorization: Bearer <token>`
-3. Kontrollera att tokenen inte har förfallit
+1. Logga ut och logga in igen
+2. Kontrollera att Frontend kommunicerar med rätt Backend (http://localhost:8080)
+3. Starta om Docker och frontend
 
-### Databaskonfiguration reset
-**Problem:** Du vill starta om databasen från början
+### Databasen nollställs varje gång jag startar Docker
+**Problem:** Data försvinner när Docker startar om
 
-**Lösning:**
-```bash
-# Radera Docker-volymen
-docker-compose down -v
+**Förklaring:** Detta är avsiktligt! `spring.jpa.hibernate.ddl-auto=create` nollställer databasen och fyller den med testdata från `data.sql` varje gång.
 
-# Starta om
-docker-compose up
+**Lösning (om du vill behålla data):**
+```properties
+# Ändra i backend/src/main/resources/application.properties:
+spring.jpa.hibernate.ddl-auto=update
+# OBS: Du måste sedan köra SQL manually första gången
 ```
 
 ---
@@ -453,7 +553,7 @@ docker-compose up
 ## 📧 Projekt Info
 
 - **Status:** Examensarbete
-- **Skapad:** 2026-04-07
+- **Skapad:** 2025-12-20
 - **Version:** 1.0.0
 - **Byggverktyg:** Maven (backend), NPM (frontend)
 - **Databas:** MySQL 8.4
