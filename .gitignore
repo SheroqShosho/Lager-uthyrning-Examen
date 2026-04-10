@@ -10,9 +10,9 @@ backend/*.class
 .factorypath
 
 # Maven wrapper är VIKTIGT - behålls för att lärare kan köra ./mvnw
-# .mvn/
-# mvnw
-# mvnw.cmd
+.mvn/
+# mvnw           (BEHÅLLS - lärare behöver denna)
+mvnw.cmd        (BEHÅLLS för Windows-kompatibilitet)
 
 # ============================================================
 # NODE & FRONTEND
@@ -26,6 +26,7 @@ frontend/.env.*.local
 # ============================================================
 # IDE & EDITOR
 # ============================================================
+.gitattributes
 .idea/
 .vscode/
 .vs/
