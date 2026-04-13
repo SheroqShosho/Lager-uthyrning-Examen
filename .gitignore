@@ -11,8 +11,8 @@ backend/*.class
 
 # Maven wrapper är VIKTIGT - behålls för att lärare kan köra ./mvnw
 .mvn/
-# mvnw           (BEHÅLLS - lärare behöver denna)
-mvnw.cmd        (BEHÅLLS för Windows-kompatibilitet)
+# mvnw
+mvnw.cmd
 
 # ============================================================
 # NODE & FRONTEND
